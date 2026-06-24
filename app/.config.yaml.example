@@ -1,5 +1,5 @@
 accounts:
-  main: ...
+  main: YzfBl6pteHuifbyezDX36Ni82V17-gchNF5Idjnj
 aria2:
   url: http://localhost:6800/jsonrpc
   secret: YOUR_ARIA2_RPC_SECRET
