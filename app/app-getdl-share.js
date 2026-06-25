@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import { request } from 'undici';
 import { input } from '@inquirer/prompts';
 
+import { Readable } from 'node:stream';
+
 import Argv from './module-argv.js';
 import TeraBoxApp from 'terabox-api';
 
@@ -178,38 +180,41 @@ function changeRoot(rPath){
     return rPath.replace(new RegExp('^' + newRootDir), '').replace(new RegExp('^/'), '');
 }
 
-async function addDownloads(fsList){
-    // aria2c -x 16 -s 10 -j 4 -k 1M --enable-rpc --rpc-allow-origin-all=true --dir=D:/Downloads --rpc-secret=YOUR_ARIA2_RPC_SECRET
-    // https://aria2.github.io/manual/en/html/aria2c.html#aria2.addUri
-    
-    const jsonReq = {
-        jsonrpc: '2.0',
-        id: 'DOWNLOAD_ID',
-        method: 'aria2.addUri',
-        params: [ 'token:' + config.aria2.secret ],
-    };
-    
-    const rpcReq = [];
-    for(const [i, f] of fsList.entries()){
-        rpcReq.push(structuredClone(jsonReq));
-        rpcReq[i].id = crypto.randomUUID();
-        rpcReq[i].params.push([f.dlink]);
-        rpcReq[i].params.push({ 'user-agent': app.params.ua, out: (f.path?f.path+'/':'') + f.filename });
-    }
-    
-    try{
-        const rpcUrl = new URL(config.aria2.url);
-        const req = await request(rpcUrl, {
-            method: 'POST',
-            body: JSON.stringify(rpcReq),
-        });
-        console.log('ADDING...');
-        console.log('CODE:', req.statusCode);
-        // console.log(await req.body.json());
-    }
-    catch(error){
-        // error = new Error('[ERROR] aria2.addUri', { cause: error });
-        console.error('[ERROR] aria2.addUri:', error.code);
-        // console.log('[RPC-REQ]', rpcReq);
+async function addDownloads(fsList) {
+    // Add your exact ndus cookie here
+    const myCookie = "ndus=YQGViBNpeHui1Q4wYb37PL51qXZC3YEwZu4ULbUg";
+
+    for (const f of fsList) {
+        console.log(`\n:: Starting direct download for: ${f.filename}`);
+        console.log(`:: Please wait, downloading directly via Node.js...`);
+
+        try {
+            // 1. Use native fetch, which automatically follows 302 redirects!
+            const res = await fetch(f.dlink, {
+                method: 'GET',
+                headers: {
+                    'User-Agent': app.params.ua,
+                    'Cookie': myCookie
+                }
+            });
+
+            if (!res.ok) {
+                console.log(`[ERROR] Download failed! Status code: ${res.status}`);
+                continue;
+            }
+
+            // 2. Stream the response body directly to a local file
+            const dest = fs.createWriteStream(f.filename);
+            Readable.fromWeb(res.body).pipe(dest);
+
+            await new Promise((resolve, reject) => {
+                dest.on('finish', resolve);
+                dest.on('error', reject);
+            });
+
+            console.log(`[SUCCESS] File saved locally as: ${f.filename}\n`);
+        } catch (err) {
+            console.error(`[ERROR] Failed to download ${f.filename}:`, err.message);
+        }
     }
 }
